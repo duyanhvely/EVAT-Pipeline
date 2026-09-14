@@ -33,7 +33,28 @@ pipeline {
         }
         stage('Deploy') {
             steps {
-                sh 'docker run -d -p 8000:8000 --name evat-app evat-data-science || true'
+                sh '''
+                    docker stop evat-app || true
+                    docker rm evat-app || true
+                    docker run -d -p 8000:8000 --name evat-app evat-data-science
+                '''
+            }
+        }
+        stage('Release') {
+            steps {
+                sh '''
+                    docker tag evat-data-science evat-data-science:v1.0
+                    echo "Released version 1.0"
+                '''
+            }
+        }
+        stage('Monitoring') {
+            steps {
+                sh '''
+                    docker inspect evat-app || true
+                    docker stats --no-stream evat-app || true
+                    echo "Monitoring complete"
+                '''
             }
         }
     }
