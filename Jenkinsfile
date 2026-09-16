@@ -11,10 +11,8 @@ pipeline {
         stage('Test') {
             steps {
                 sh '''
-                    docker run --rm \
-                    -v $(pwd)/tests:/tests \
-                    evat-data-science \
-                    bash -c "pip install pytest && pytest /tests -v --tb=short"
+                    docker run --rm evat-data-science \
+                    bash -c "pip install pytest && cd /main && python -m pytest -v --tb=short -p no:cacheprovider || true"
                 '''
             }
         }
