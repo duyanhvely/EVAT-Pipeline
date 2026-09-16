@@ -5,13 +5,16 @@ pipeline {
         stage('Build') {
             steps {
                 sh 'docker build -t evat-data-science .'
+                sh 'docker images evat-data-science'
             }
         }
         stage('Test') {
             steps {
                 sh '''
-                    docker run --rm evat-data-science \
-                    bash -c "pip install pytest && pytest main/app --tb=short || true"
+                    docker run --rm \
+                    -v $(pwd)/tests:/tests \
+                    evat-data-science \
+                    bash -c "pip install pytest && pytest /tests -v --tb=short"
                 '''
             }
         }
@@ -19,7 +22,7 @@ pipeline {
             steps {
                 sh '''
                     docker run --rm evat-data-science \
-                    bash -c "pip install pylint && pylint main/app || true"
+                    bash -c "pip install pylint && pylint main/app --fail-under=5 || true"
                 '''
             }
         }
@@ -27,7 +30,7 @@ pipeline {
             steps {
                 sh '''
                     docker run --rm evat-data-science \
-                    bash -c "pip install bandit && bandit -r main/app || true"
+                    bash -c "pip install bandit && bandit -r main/app -f txt || true"
                 '''
             }
         }
@@ -37,6 +40,8 @@ pipeline {
                     docker stop evat-app || true
                     docker rm evat-app || true
                     docker run -d -p 8000:8000 --name evat-app evat-data-science
+                    sleep 5
+                    docker ps | grep evat-app
                 '''
             }
         }
@@ -44,18 +49,32 @@ pipeline {
             steps {
                 sh '''
                     docker tag evat-data-science evat-data-science:v1.0
-                    echo "Released version 1.0"
+                    docker images evat-data-science
+                    echo "Successfully released evat-data-science:v1.0"
                 '''
             }
         }
         stage('Monitoring') {
             steps {
                 sh '''
-                    docker inspect evat-app || true
-                    docker stats --no-stream evat-app || true
+                    echo "=== Container Status ==="
+                    docker inspect evat-app --format="Status: {{.State.Status}}"
+                    echo "=== Resource Usage ==="
+                    docker stats --no-stream evat-app
+                    echo "=== Container Logs ==="
+                    docker logs evat-app --tail=20 || true
                     echo "Monitoring complete"
                 '''
             }
         }
     }
-} 
+    
+    post {
+        success {
+            echo 'Pipeline completed successfully!'
+        }
+        failure {
+            echo 'Pipeline failed!'
+        }
+    }
+}
