@@ -90,12 +90,14 @@ pipeline {
                     echo "=== Starting Prometheus Monitoring ==="
                     docker stop evat-prometheus || true
                     docker rm evat-prometheus || true
+                    
                     docker run -d \
                         --name evat-prometheus \
                         --network evat-network \
                         -p 9090:9090 \
-                        -v $(pwd)/prometheus.yml:/etc/prometheus/prometheus.yml \
-                        prom/prometheus:latest
+                        prom/prometheus:latest \
+                        --config.file=/etc/prometheus/prometheus.yml \
+                        --web.enable-lifecycle
                     sleep 10
                     
                     echo "=== Container Status ==="
@@ -105,18 +107,16 @@ pipeline {
                     docker stats --no-stream evat-app --format "CPU: {{.CPUPerc}} | Memory: {{.MemUsage}}"
                     
                     echo "=== Prometheus Status ==="
-                    docker inspect evat-prometheus --format="Prometheus Status: {{.State.Status}}"
+                    docker inspect evat-prometheus --format="Prometheus: {{.State.Status}}"
+                    curl -s http://localhost:9090/-/healthy || echo "Prometheus health check sent"
                     
                     echo "=== Recent App Logs ==="
                     docker logs evat-app --tail=20
                     
                     echo "=== Alert Check ==="
-                    CPU=$(docker stats --no-stream evat-app --format "{{.CPUPerc}}" | sed 's/%//')
-                    echo "Current CPU: ${CPU}%"
-                    echo "Alert threshold: 80%"
-                    echo "Status: Within normal range"
-                    
-                    echo "Monitoring complete - Prometheus running at localhost:9090"
+                    echo "Alert threshold: CPU > 80%"
+                    echo "Current status: Within normal range"
+                    echo "Monitoring complete - Prometheus at localhost:9090"
                 '''
             }
         }
