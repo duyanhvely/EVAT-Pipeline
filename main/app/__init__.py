@@ -11,25 +11,25 @@ from app.swagger import api
 def create_app():
     app = Flask(__name__)
 
-    # Load environment variables from .env file
     load_dotenv()
 
-    # Access environment variables
-    app.config['GOOGLE_MAP_API_KEY'] = os.getenv('GOOGLE_MAP_API_KEY')
-    app.config['DATABASE_URL'] = os.getenv('DATABASE_URL')
+    app.config['GOOGLE_MAP_API_KEY'] = os.getenv('GOOGLE_MAP_API_KEY', 'test')
+    app.config['DATABASE_URL'] = os.getenv('DATABASE_URL', 'mongodb://localhost:27017')
 
-    # Set up MongoDB connection
-    client = MongoClient(app.config['DATABASE_URL'], tls=True, tlsAllowInvalidCertificates=True)
+    database_url = app.config['DATABASE_URL']
+    
+    if 'mongodb.net' in database_url:
+        client = MongoClient(database_url, tls=True, tlsAllowInvalidCertificates=True)
+    else:
+        client = MongoClient(database_url)
 
     db = client['EVAT']
 
-    # Initialize the models
     app.charging_stations = Station(db)
     app.users = User(db)
 
     api.init_app(app)
 
-    # Register the controller blueprints
     app.register_blueprint(station_controller)
     app.register_blueprint(user_controller)
 
