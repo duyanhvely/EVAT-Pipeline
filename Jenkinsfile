@@ -51,7 +51,9 @@ pipeline {
             steps {
                 sh '''
                     docker stop evat-app || true
+                    docker stop evat-app-test || true
                     docker rm evat-app || true
+                    docker rm evat-app-test || true
                     docker network create evat-network || true
                     docker stop evat-mongo || true
                     docker rm evat-mongo || true
@@ -62,7 +64,8 @@ pipeline {
                     docker run -d -p 5000:5000 \
                         --name evat-app \
                         --network evat-network \
-                        -e MONGO_URI=mongodb://evat-mongo:27017 \
+                        -e DATABASE_URL=mongodb://evat-mongo:27017 \
+                        -e GOOGLE_MAP_API_KEY=test \
                         ${IMAGE_NAME}:${IMAGE_TAG}
                     sleep 15
                     docker ps | grep evat-app
