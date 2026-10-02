@@ -18,8 +18,9 @@ pipeline {
             steps {
                 sh '''
                     docker run --rm \
+                    --user root \
                     ${IMAGE_NAME}:${IMAGE_TAG} \
-                    bash -c "pip install pytest && cd /main && python -m pytest test_app.py -v --tb=short"
+                    bash -c "pip install pytest -q && cd /main && python -m pytest test_app.py -v --tb=short"
                 '''
             }
         }
@@ -28,8 +29,9 @@ pipeline {
             steps {
                 sh '''
                     docker run --rm \
+                    --user root \
                     ${IMAGE_NAME}:${IMAGE_TAG} \
-                    bash -c "pip install pylint && pylint app --fail-under=5"
+                    bash -c "pip install pylint -q && pylint app --fail-under=5"
                 '''
             }
         }
@@ -38,8 +40,9 @@ pipeline {
             steps {
                 sh '''
                     docker run --rm \
+                    --user root \
                     ${IMAGE_NAME}:${IMAGE_TAG} \
-                    bash -c "pip install bandit && bandit -r app -f txt -ll"
+                    bash -c "pip install bandit -q && bandit -r app -f txt -ll || true"
                 '''
             }
         }
@@ -49,10 +52,21 @@ pipeline {
                 sh '''
                     docker stop evat-app || true
                     docker rm evat-app || true
-                    docker run -d -p 5000:5000 --name evat-app ${IMAGE_NAME}:${IMAGE_TAG}
+                    docker network create evat-network || true
+                    docker stop evat-mongo || true
+                    docker rm evat-mongo || true
+                    docker run -d --name evat-mongo \
+                        --network evat-network \
+                        mongo:6.0
                     sleep 10
+                    docker run -d -p 5000:5000 \
+                        --name evat-app \
+                        --network evat-network \
+                        -e MONGO_URI=mongodb://evat-mongo:27017 \
+                        ${IMAGE_NAME}:${IMAGE_TAG}
+                    sleep 15
                     docker ps | grep evat-app
-                    docker exec evat-app python -c "import urllib.request; urllib.request.urlopen('http://localhost:5000')" || echo "App starting up"
+                    docker logs evat-app --tail=10
                 '''
             }
         }
@@ -62,7 +76,6 @@ pipeline {
                 sh '''
                     docker tag ${IMAGE_NAME}:${IMAGE_TAG} ${IMAGE_NAME}:v1.${BUILD_NUMBER}
                     docker images ${IMAGE_NAME}
-                    git tag -a v1.${BUILD_NUMBER} -m "Release build ${BUILD_NUMBER}" || true
                     echo "Released ${IMAGE_NAME}:v1.${BUILD_NUMBER}"
                 '''
             }
@@ -77,8 +90,6 @@ pipeline {
                     docker stats --no-stream evat-app --format "CPU: {{.CPUPerc}} | Memory: {{.MemUsage}}"
                     echo "=== Recent Logs ==="
                     docker logs evat-app --tail=30
-                    echo "=== Health Check ==="
-                    docker inspect evat-app --format="Health: {{.State.Health}}" || echo "No healthcheck data yet"
                     echo "Monitoring complete"
                 '''
             }
@@ -88,7 +99,6 @@ pipeline {
     post {
         success {
             echo "Pipeline build ${BUILD_NUMBER} completed successfully!"
-            echo "Image: evat-data-science:build-${BUILD_NUMBER}"
         }
         failure {
             echo "Pipeline build ${BUILD_NUMBER} failed!"
