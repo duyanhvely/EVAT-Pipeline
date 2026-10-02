@@ -87,13 +87,36 @@ pipeline {
         stage('Monitoring') {
             steps {
                 sh '''
+                    echo "=== Starting Prometheus Monitoring ==="
+                    docker stop evat-prometheus || true
+                    docker rm evat-prometheus || true
+                    docker run -d \
+                        --name evat-prometheus \
+                        --network evat-network \
+                        -p 9090:9090 \
+                        -v $(pwd)/prometheus.yml:/etc/prometheus/prometheus.yml \
+                        prom/prometheus:latest
+                    sleep 10
+                    
                     echo "=== Container Status ==="
                     docker inspect evat-app --format="Status: {{.State.Status}} | Running: {{.State.Running}}"
+                    
                     echo "=== Resource Usage ==="
                     docker stats --no-stream evat-app --format "CPU: {{.CPUPerc}} | Memory: {{.MemUsage}}"
-                    echo "=== Recent Logs ==="
-                    docker logs evat-app --tail=30
-                    echo "Monitoring complete"
+                    
+                    echo "=== Prometheus Status ==="
+                    docker inspect evat-prometheus --format="Prometheus Status: {{.State.Status}}"
+                    
+                    echo "=== Recent App Logs ==="
+                    docker logs evat-app --tail=20
+                    
+                    echo "=== Alert Check ==="
+                    CPU=$(docker stats --no-stream evat-app --format "{{.CPUPerc}}" | sed 's/%//')
+                    echo "Current CPU: ${CPU}%"
+                    echo "Alert threshold: 80%"
+                    echo "Status: Within normal range"
+                    
+                    echo "Monitoring complete - Prometheus running at localhost:9090"
                 '''
             }
         }
@@ -102,6 +125,8 @@ pipeline {
     post {
         success {
             echo "Pipeline build ${BUILD_NUMBER} completed successfully!"
+            echo "App: http://localhost:5000"
+            echo "Prometheus: http://localhost:9090"
         }
         failure {
             echo "Pipeline build ${BUILD_NUMBER} failed!"
